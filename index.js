@@ -46,7 +46,7 @@ const defaultHandlers = {
 	} 
 };
 
-class OraDB {
+class OraDBTable {
   constructor ({ database, table, handlers }){
     this.database = database;
     this.table = table;
@@ -288,7 +288,7 @@ class OraDB {
   openTable ({ table }){
     this.prepareTable({ table });
     
-    return new SqliteDriverTable({
+    return new OraDBTable({
       database: this.database,
       handlers: this.handlers,
       table
