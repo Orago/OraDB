@@ -1,0 +1,30 @@
+{
+  "scripts": {
+    "start": "node index.js"
+  },
+  "engines": {
+    "node": "16.x"
+  },
+  "dependencies": {
+    "better-sqlite3": "^7.6.2",
+    "bson": "^4.7.0",
+    "lodash": "^4.17.21"
+  },
+  "name": "ora-db",
+  "description": "Sqlite + JSON",
+  "version": "0.0.1",
+  "main": "index.js",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/Orago/OraDB.git"
+  },
+  "keywords": [
+    "database"
+  ],
+  "author": "Orago",
+  "license": "ISC",
+  "bugs": {
+    "url": "https://github.com/Orago/OraDB/issues"
+  },
+  "homepage": "https://github.com/Orago/OraDB#readme"
+}
