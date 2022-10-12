@@ -111,14 +111,10 @@ class OraDBTable {
 		has: async ({ where }) => {
       return await this.row.get({ column: Object.keys(where)[0], where }) != null;
     },
-    getAll: async () => {
-      const prep = this.database.prepare(`SELECT * FROM ${ this.table }`),
-            data = [];
+    count: async () => {
+      const { database, table } = this;
 
-      for (const row of prep.iterate())
-        data.push(row);
-
-      return data;
+      return await database.prepare(`SELECT Count(*) FROM ${table}`).get()['Count(*)'];
     },
     getData: async ({ columns = [], where = {} }) => {
       const { database, table } = this;
@@ -144,8 +140,7 @@ class OraDBTable {
 
       return newData;
     },
-    
-    get: async ({ column, where,path }) => {
+    get: async ({ column, where, path }) => {
       const { database, table } = this;
       const whereKeys = parseKeys({ keys: where, pre: 'WHERE', joint: ' AND ' });
       const value = await database.prepare(`SELECT ${column} FROM ${table} WHERE ${whereKeys.string};`).get(whereKeys.data);
@@ -221,10 +216,22 @@ class OraDBTable {
 				delete: async () => {
 					unset(obj ?? {}, path);
 
-					await send(obj);
+          if (path == undefined) this.row.delete({ where });
+          else await send(obj);
 				}
 			}
 		},
+    delete: async ({ where }) => {
+      const { database, table } = this;
+      const whereKeys = parseKeys({ keys: where, pre: 'WHERE', joint: ' AND ' });
+
+      return (
+        database
+        .prepare(`DELETE FROM ${table} WHERE ${whereKeys.string}`)
+        .run(whereKeys.data)
+        .changes
+      );
+    },
     setValues: async (args) => {
       const { database, table, handlers } = this;
       const { where, columns } = args;
