@@ -12,7 +12,7 @@
   },
   "name": "ora-db",
   "description": "Sqlite + JSON",
-  "version": "0.2.2",
+  "version": "0.2.3",
   "main": "index.js",
   "repository": {
     "type": "git",

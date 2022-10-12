@@ -2,10 +2,13 @@
 For your information, this project is very recently released and most of the links in the documentation are non functional.
 
 # Template Database
-|id|username|age|
-|1|Orago|17|
-|2|king|10|
-|3|grimm|20|
+| id | usernmame | age |
+|----|-----------|-----|
+| 1  | orago     | 17  |
+| 2  | KING      | 10  |
+| 3  | grimm     | 20  |
+
+
 
 # class *Database*
 - [new Database()](#new-database-options)
@@ -161,7 +164,7 @@ await userTable.columns.rename({
 Resulting Database:
 
 |id|username|favorite-number|
-|1|Orago|17|
+|1|orago|17|
 |2|king|10|
 |3|grimm|20|
 
@@ -187,9 +190,15 @@ await userTable.columns.add({
 Resulting Database:
 
 |id|username|age|role|data|
-|1|Orago|17|NULL|NULL|
+|1|orago|17|NULL|NULL|
 |2|king|10|NULL|NULL|
 |3|grimm|20|NULL|NULL|
+
+| id | usernmame | age | role | data |
+|----|-----------|-----|------|------|
+| 1  | orago     | 17  | NULL | NULL |
+| 2  | KING      | 10  | NULL | NULL |
+| 3  | grimm     | 20  | NULL | NULL |
 
 ### .remove( column )
 Removes a column and all of the data inside of it.
@@ -201,10 +210,11 @@ await userTable.columns.remove('id', 'username');
 ```
 
 Resulting Database:
-|age|
-|17|
-|10|
-|21|
+| age |
+|-----|
+| 17  |
+| 10  |
+| 20  |
 
 ## .rows
 ### .has({ options })
@@ -216,9 +226,10 @@ Returns true or false whether an entry exists matching a column name and column 
 
 Database searching from:
 |id|username|age|
-|1|Orago|17|
+|1|orago|17|
 |2|king|10|
 |3|grimm|20|
+
 
 ```js
 console.log(
@@ -246,10 +257,11 @@ console.log(
 Returns the number of rows in a table
 
 Database searching from:
-|id|username|age|
-|1|Orago|17|
-|2|king|10|
-|3|grimm|20|
+| id | usernmame | age |
+|----|-----------|-----|
+| 1  | orago     | 17  |
+| 2  | KING      | 10  |
+| 3  | grimm     | 20  |
 
 ```js
 console.log(
@@ -264,10 +276,11 @@ Returns non handled data from an array
 -`options.where`: The statement to match for an entry.
 
 Database searching from:
-|id|username|age|
-|1|Orago|17|
-|2|king|10|
-|3|grimm|20|
+| id | usernmame | age |
+|----|-----------|-----|
+| 1  | orago     | 17  |
+| 2  | KING      | 10  |
+| 3  | grimm     | 20  |
 
 ```js
 console.log(
@@ -285,5 +298,3 @@ console.log(
 
 Reminder to self:
 Things left to document - .row.getDataParsed, .row.get, .row.JSON, .row.delete, .row.setValues, (How to use custom data types and handlers)
-
-
