@@ -1,14 +1,10 @@
-const {
-  set,
-  get,
-  unset
-} = require("lodash");
+import lodash from 'lodash';
+import sqlite3 from 'better-sqlite3';
+import BSON from 'bson';
 
-const sqlite3 = require("better-sqlite3");
+let { set, get, unset } = lodash;
 
-const BSON = require('bson');
-
-let parseKeys = ({ keys, joint = ', ', pre = 'ID' }) => {
+let parseKeys = ({ keys = [], joint = ', ', pre = 'ID' }) => {
   let cleanKey = k => k.replace(/[^a-zA-Z0-9]/g, ''),
       data = {};
 
@@ -69,8 +65,8 @@ class OraDBTable {
     rename: async({ column, to }) => {
       let { table, columns, database } = this;
   
-      if (table  == undefined) console.error('@SqliteDriverTable.columns.remove: Missing Table');
-      if (column == undefined) console.error('@SqliteDriverTable.columns.remove: Missing Column');
+      if (table  == undefined) return console.error('@SqliteDriverTable.columns.remove: Missing Table');
+      if (column == undefined) return console.error('@SqliteDriverTable.columns.remove: Missing Column');
   
       if (!await columns.has(column)) return console.log(`ending cause col doesnt exist ${column}`);
       else return database.prepare(`ALTER TABLE ${ table } RENAME COLUMN ${column} TO ${to};`).run();
@@ -78,8 +74,8 @@ class OraDBTable {
     add: async (...columns) => {
       let { table, database } = this;
 
-      if (table  == undefined)  console.error('@SqliteDriverTable.columns.add: Missing Table');
-      if (columns == undefined) console.error('@SqliteDriverTable.columns.add: Missing Columns');
+      if (table  == undefined)  return console.error('@SqliteDriverTable.columns.add: Missing Table');
+      if (columns == undefined) return console.error('@SqliteDriverTable.columns.add: Missing Columns');
 
       let list = await this.columns.list();
 
@@ -94,8 +90,8 @@ class OraDBTable {
     },
     remove: async (...columns) => {
       let { table, database } = this;
-      if (table  == undefined)  console.error('@SqliteDriverTable.columns.remove: Missing Table');
-      if (columns == undefined) console.error('@SqliteDriverTable.columns.remove: Missing Column');
+      if (table  == undefined)  return console.error('@SqliteDriverTable.columns.remove: Missing Table');
+      if (columns == undefined) return console.error('@SqliteDriverTable.columns.remove: Missing Column');
 
       let list = await this.columns.list();
 
@@ -108,7 +104,7 @@ class OraDBTable {
   }
 
   row = {
-		has: async ({ where }) => {
+		has: async ({ where = {} }) => {
       return await this.row.get({ column: Object.keys(where)[0], where }) != null;
     },
     count: async () => {
@@ -123,7 +119,7 @@ class OraDBTable {
       const colString = columnsFiltered.length > 0 ? columnsFiltered.join(', ') : '*';
       const whereKeys = parseKeys({ keys: where, pre: 'WHERE', joint: ' AND ' });
 
-      return await database.prepare(`SELECT ${colString} FROM ${table} ${(whereKeys.string.length > 0 ? 'WHERE ' : '') +whereKeys.string};`).get(whereKeys.data);
+      return await database.prepare(`SELECT ${colString} FROM ${table} ${(whereKeys.string.length > 0 ? 'WHERE ' : '') + whereKeys.string};`).get(whereKeys.data);
     },
     getDataParsed: async (...args) =>  {
       const data = await this.row.getData(...args);
@@ -140,27 +136,29 @@ class OraDBTable {
 
       return newData;
     },
-    get: async ({ column, where, path }) => {
+    get: async ({ column, where = {}, path }) => {
+      if (column == undefined) return console.error('@SqliteDriverTable.row.get: Missing Column');
+
       const { database, table } = this;
-      const whereKeys = parseKeys({ keys: where, pre: 'WHERE', joint: ' AND ' });
-      const value = await database.prepare(`SELECT ${column} FROM ${table} WHERE ${whereKeys.string};`).get(whereKeys.data);
-      const columnType = ( await this.columns.get(column) )?.type || 'TEXT';
+      const whereKeys   = parseKeys({ keys: where, pre: 'WHERE', joint: ' AND ' });
+      const whereClause =  (whereKeys.string.length > 0 ? 'WHERE ' : '') + whereKeys.string;
+      const value       = await database.prepare(`SELECT ${column} FROM ${table} ${whereClause};`).get(whereKeys.data);
+      const columnType  = ( await this.columns.get(column) )?.type || 'TEXT';
 
       if (value?.[column] == undefined) return null;
 
       else if (this.handlers.hasOwnProperty(columnType)){
-				let data = await this.handlers[columnType].parse(value?.[column]);
-				if (path != undefined)
-					return get(data, path);
-				else return data;
+				const data = await this.handlers[columnType].parse(value?.[column]);
+        
+        return path != undefined ? get(data, path) : data;
 			}
       else return value?.[column];
     },
-		JSON: async ({ column, path,  where }) => {
+		JSON: async ({ column, path = '',  where = {} }) => {
 			const columnData = await this.columns.get(column);
 
 			if (columnData?.type != 'JSON') return console.error(`@SqliteDriverTable.row.updateJSON: Invalid Column Type For (${ column })`);
-      if (path  == undefined) console.error('@SqliteDriverTable.row.updateJSON: Missing Path');
+      if (path  == undefined) return console.error('@SqliteDriverTable.row.updateJSON: Missing Path');
 
   		let obj = await this.row.get({ column, where });
 
@@ -263,7 +261,10 @@ class OraDBTable {
 				});
       }
       else {
-        let statement = `INSERT INTO people VALUES (${columnList.map( e => '@' + e).join(', ')})`;
+        const statement = `INSERT INTO people VALUES (${columnList.map( e => '@' + e).join(', ')})`;
+        
+        for (const colName of columnList)
+          columns[colName] ??= null;
 
         await database.prepare(statement).run(columns);
       }
@@ -303,7 +304,8 @@ class OraDB {
   }
 
   async dropTable ({ table }){
-    return this.database.prepare(`DROP TABLE ${ table };`);
+    console.log(table)
+    return this.database.prepare(`DROP TABLE IF EXISTS ${table};`).run();
   }
 
   async deleteAllRows ({ table }){
@@ -311,4 +313,6 @@ class OraDB {
   }
 }
 
-module.exports = OraDB;
+export { OraDB }
+
+export default OraDB;
