@@ -83,8 +83,10 @@ class OraDBTable {
         let { column, type = 'TEXT' } = columnData;
         
         if (!list.includes(column)){
-          if (await this.columns.has(column)) console.log(`ending cause col exists ${column}`);
-          else database.prepare(`ALTER TABLE ${ table } ADD COLUMN ${ column } ${ type.toUpperCase() }`).run();
+          if (await this.columns.has(column))
+            return console.log(`ending cause col exists ${column}`);
+          
+          database.prepare(`ALTER TABLE ${ table } ADD COLUMN ${ column } ${ type.toUpperCase() }`).run();
         }
       }
     },
@@ -154,14 +156,13 @@ class OraDBTable {
 			}
       else return value?.[column];
     },
-		JSON: async ({ column, path = '',  where = {} }) => {
+		JSON: async ({ column, where = {} }) => {
 			const columnData = await this.columns.get(column);
 
 			if (columnData?.type != 'JSON') return console.error(`@SqliteDriverTable.row.updateJSON: Invalid Column Type For (${ column })`);
-      if (path  == undefined) return console.error('@SqliteDriverTable.row.updateJSON: Missing Path');
+      // if (path  == undefined)         return console.error('@SqliteDriverTable.row.updateJSON: Missing Path');
 
   		let obj = await this.row.get({ column, where });
-
 			if (obj instanceof Object == false) obj = {};
 
 			let send = async data => await this.row.setValues({
@@ -171,51 +172,66 @@ class OraDBTable {
 				where
 			});
 
-			let addSub = async (second = 0) => {
-				let first = get(obj, path);
+      let setOnPath = (obj = {}, path, value) => {
+        if (typeof path?.includes == 'function' && 
+          path.includes('.')
+        ) set(obj, path, value);
 
+        else obj = value;
+
+        return obj;
+      }
+
+			let addSub = async (path, second = 0) => {
+				let first = get(obj, path);
 				if (typeof first != 'number') first = 0;
 
-				set(obj ?? {}, path, first + second);
+				await send(
+          setOnPath(obj, path, first + second)
+        );
 
-				await send(obj)
+        return this;
 			}
 
 			return {
 				get: async () => get(obj, path),
-				update: async value => {
-					set(obj ?? {}, path, value);
+				update: async function (path, value) {
+					await send(
+            setOnPath(obj, path, value)
+          );
 
-					await send(obj);
+          return this;
 				},
 				add: addSub,
-				subtract: second => addSub(-second),
-				push: async (...items) => {
+				subtract: (...args) => addSub(...args),
+        /* Remember to finish push and pull features */
+				push: async (path, ...items) => {
 					let list = get(obj, path);
 					if (!Array.isArray(list)) list = [];
-					
-					list.push(...items);
-	
-					set(obj ?? {}, path, list);
 
-					await send(obj)
+					await send(
+            setOnPath(obj, path, list)
+          );
 				},
-				pull: async (...remove) => {
+				pull: async (path, ...remove) => {
 					let list = get(obj, path);
 					if (!Array.isArray(list)) list = [];
 					if (!Array.isArray(remove)) remove = [];
 					
 					list = list.filter(value => !remove.includes(value));
-	
-					set(obj ?? {}, path, list);
 
-					await send(obj);
+					await send(
+            setOnPath(obj, path, list)
+          );
 				},
 				delete: async () => {
-					unset(obj ?? {}, path);
-
           if (path == undefined) this.row.delete({ where });
-          else await send(obj);
+          else {
+            if (path?.includes('.'))
+              unset(obj ?? {}, path);
+
+            await send(obj);
+          }
 				}
 			}
 		},
@@ -304,7 +320,6 @@ class OraDB {
   }
 
   async dropTable ({ table }){
-    console.log(table)
     return this.database.prepare(`DROP TABLE IF EXISTS ${table};`).run();
   }
 
