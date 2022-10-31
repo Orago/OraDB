@@ -11,46 +11,49 @@ let run = async () => {
   await db.deleteAllRows({ table })
 
   const testTable = db.openTable({ table });
-  let id = 'catgo';
+  let id = 'orago';
 
   // await table.columns.add({
   //   column: 'data',
   //   type: 'json'
   // });
   
-
-
-  let operation = await testTable.row.JSON({
-    column: 'data', 
-    where: { id }
-  });
-
-  console.log('starting')
-
-  await operation.update(undefined, {
-    id,
-    data: {
-      test: 'trdue'
+  await testTable.row.setValues({
+    columns: {
+      id,
+      data: {
+        age: 17
+      }
+    },
+    where: {
+      id
     }
-  }).then(obj => {
-    
-  })
+  }).then(async db => {
+    let { row } = db;
 
+    await row.JSON({
+      column: 'data',
+      path: 'tdsta',
+      where: { id }
+    })
+    .then(e => 
+      e.update({
+        id,
+        data: {
+          test: 'trdue'
+        }
+      })
+    );
 
-
-  console.log('finished');
-
-  // await testTable.row.setValues({
-  //   columns: { id },
-  //   where
-  // });
-
-  // console.log(
-  //   await table.row.get({
-  //     column: 'data',
-  //     where: { id }
-  //   })
-  // )
+    await row.JSON({
+      column: 'data',
+      path: 'age',
+      where: { id }
+    })
+    .then(e => 
+      e.subtract(50000)
+    );
+  });
 }
 
 run()
