@@ -277,7 +277,7 @@ class OraDBTable {
 				});
       }
       else {
-        const statement = `INSERT INTO people VALUES (${columnList.map( e => '@' + e).join(', ')})`;
+        const statement = `INSERT INTO ${table} VALUES (${columnList.map( e => '@' + e).join(', ')})`;
         
         for (const name of columnList)
           columns[name] ??= null;
