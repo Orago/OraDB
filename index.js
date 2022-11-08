@@ -151,7 +151,7 @@ class OraDBTable {
       const value = await database.prepare(`SELECT ${column} FROM ${table} WHERE ${whereKeys.string};`).get(whereKeys.data);
       const columnType = ( await this.columns.get(column) )?.type || 'TEXT';
 
-      if (value?.[column] == undefined) return null;
+      if (value?.[column] == undefined) return;
 
       else if (this.handlers.hasOwnProperty(columnType)){
 				let data = await this.handlers[columnType].parse(value?.[column]);
