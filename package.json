@@ -1,4 +1,10 @@
 {
+
+  "name": "ora-db",
+  "description": "Sqlite + JSON",
+  "version": "0.2.36",
+  "main": "index.js",
+  "type": "module",
   "scripts": {
     "start": "node index.js"
   },
@@ -10,10 +16,6 @@
     "bson": "^4.7.0",
     "lodash": "^4.17.21"
   },
-  "name": "ora-db",
-  "description": "Sqlite + JSON",
-  "version": "0.0.2",
-  "main": "index.js",
   "repository": {
     "type": "git",
     "url": "git+https://github.com/Orago/OraDB.git"
