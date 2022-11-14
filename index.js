@@ -180,7 +180,7 @@ class OraDBTable {
 
 				set(obj ?? {}, path, first + second);
 
-				await send(obj)
+				await send(obj);
 			}
 
 			return {
@@ -263,8 +263,9 @@ class OraDBTable {
 				});
       }
       else {
-        let statement = `INSERT INTO people VALUES (${columnList.map( e => '@' + e).join(', ')})`;
-
+				const valFix = Object.keys(columns).map($ => `@${$}`).toString();
+        let statement = `INSERT INTO ${table} (${Object.keys(columns)}) values (${valFix})`;
+				console.log(columns)
         await database.prepare(statement).run(columns);
       }
     }
