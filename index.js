@@ -8,7 +8,7 @@ const sqlite3 = require("better-sqlite3");
 
 const BSON = require('bson');
 
-let parseKeys = ({ keys, joint = ', ', pre = 'ID' }) => {
+let parseKeys = ({ keys = {}, joint = ', ', pre = 'ID' }) => {
   let cleanKey = k => k.replace(/[^a-zA-Z0-9]/g, ''),
       data = {};
 
@@ -45,6 +45,8 @@ const defaultHandlers = {
 		stringify: input => (BSON.serialize(input)).toString('base64')
 	} 
 };
+
+const parseWhereKeys = str => (str.length > 0 ? 'WHERE ' : '') + str;
 
 class OraDBTable {
   constructor ({ database, table, handlers }){
@@ -123,7 +125,7 @@ class OraDBTable {
       const colString = columnsFiltered.length > 0 ? columnsFiltered.join(', ') : '*';
       const whereKeys = parseKeys({ keys: where, pre: 'WHERE', joint: ' AND ' });
 
-      return await database.prepare(`SELECT ${colString} FROM ${table} ${(whereKeys.string.length > 0 ? 'WHERE ' : '') +whereKeys.string};`).get(whereKeys.data);
+      return await database.prepare(`SELECT ${colString} FROM ${table} ${parseWhereKeys(whereKeys.string)};`).get(whereKeys.data);
     },
     getDataParsed: async (...args) =>  {
       const data = await this.row.getData(...args);
@@ -143,7 +145,8 @@ class OraDBTable {
     get: async ({ column, where, path }) => {
       const { database, table } = this;
       const whereKeys = parseKeys({ keys: where, pre: 'WHERE', joint: ' AND ' });
-      const value = await database.prepare(`SELECT ${column} FROM ${table} WHERE ${whereKeys.string};`).get(whereKeys.data);
+			const statement = `SELECT ${column} FROM ${table} ${parseWhereKeys(whereKeys.string)};`;
+      const value = await database.prepare(statement).get(whereKeys.data);
       const columnType = ( await this.columns.get(column) )?.type || 'TEXT';
 
       if (value?.[column] == undefined) return;
@@ -255,7 +258,7 @@ class OraDBTable {
         let columnKeys = parseKeys({ keys: columns, pre: 'COL' }),
             whereKeys  = parseKeys({ keys: where, pre: 'WHERE', joint: ' AND ' });
 
-        let statement = `UPDATE ${table} SET ${columnKeys.string} WHERE ${whereKeys.string};`;
+        let statement = `UPDATE ${table} SET ${columnKeys.string} ${parseWhereKeys(whereKeys.string)};;`;
         
         await database.prepare(statement).run({
 					...columnKeys.data,
@@ -265,7 +268,8 @@ class OraDBTable {
       else {
 				const valFix = Object.keys(columns).map($ => `@${$}`).toString();
         let statement = `INSERT INTO ${table} (${Object.keys(columns)}) values (${valFix})`;
-				console.log(columns)
+
+        
         await database.prepare(statement).run(columns);
       }
     }
