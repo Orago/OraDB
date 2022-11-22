@@ -297,8 +297,8 @@ class OraDB {
     this.database.prepare(`CREATE TABLE IF NOT EXISTS ${ table } (${ columnTypes })`).run();
   }
 
-  openTable ({ table }){
-    this.prepareTable({ table });
+  openTable ({ table, columns }){
+    this.prepareTable({ table, columns });
     
     return new OraDBTable({
       database: this.database,
