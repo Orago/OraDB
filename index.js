@@ -101,11 +101,9 @@ class OraDBTable {
 
       let list = await this.columns.list();
 
-      for (let column of columns){
-        if (list.includes(column)){
+      for (let column of columns)
+        if (list.includes(column))
           database.prepare(`ALTER TABLE ${table} DROP COLUMN ${column};`).run();
-        }
-      }
     }
   }
 
@@ -118,26 +116,36 @@ class OraDBTable {
 
       return await database.prepare(`SELECT Count(*) FROM ${table}`).get()['Count(*)'];
     },
-    getData: async ({ columns = [], where = {} }) => {
+    getData: async ({ columns = [], where = {}, limit } = {}) => {
       const { database, table } = this;
-      const allCols = await this.columns.list();
-      const columnsFiltered = columns.filter(col => allCols.includes(col));
-      const colString = columnsFiltered.length > 0 ? columnsFiltered.join(', ') : '*';
-      const whereKeys = parseKeys({ keys: where, pre: 'WHERE', joint: ' AND ' });
+      const columnList      = await this.columns.list();
+      const columnsFiltered = columns.filter(col => columnList.includes(col));
+      const whereKeys       = parseKeys({ keys: where, pre: 'WHERE', joint: ' AND ' });
 
-      return await database.prepare(`SELECT ${colString} FROM ${table} ${parseWhereKeys(whereKeys.string)};`).get(whereKeys.data);
+			if (typeof limit !== 'number') limit = 1;
+
+			const str = {
+				cols: columnsFiltered.length > 0 ? columnsFiltered.join(', ') : '*',
+				where: parseWhereKeys(whereKeys.string),
+				limit: `limit ${limit}`
+			}
+
+			const stmt = `SELECT ${str.cols} FROM ${table} ${str.where} ${str.limit};`;
+
+      return await database.prepare(stmt).all(whereKeys.data);
     },
-    getDataParsed: async (...args) =>  {
-      const data = await this.row.getData(...args);
-
-      let newData = {};
+    getDataParsed: async (args) =>  {
+      const data = (await this.row.getData({ ...args, limit: 1 }))[0];
+      const newData = {};
 
       for (let column of Object.keys(data)){
         let type = (await this.columns.get(column))?.type || 'TEXT';
-
-        if (this.handlers.hasOwnProperty(type)?.parse)
-          newData[column] = await this.handlers[type].parse(data[column]);
-        else newData[column] = data[column];
+				
+        if (typeof this.handlers[type]?.parse == 'function')
+					newData[column] = await this.handlers[type].parse(data[column]);
+				
+        else
+					newData[column] = data[column];
       }
 
       return newData;
