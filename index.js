@@ -48,6 +48,24 @@ const defaultHandlers = {
 
 const parseWhereKeys = str => (str.length > 0 ? 'WHERE ' : '') + str;
 
+const parseRows = (columnData, handlers) => async (...rows) => {
+	const getCol = name => columnData.find($ => $.name == name);
+	const resultRows = [];
+
+	for (let rowData of rows){
+		const newData = {};
+
+		for (let column of Object.keys(rowData)){
+			const { parse } = handlers?.[ getCol(column)?.type || 'TEXT' ] || {};
+	
+			newData[column] = typeof parse == 'function' ? await parse(rowData[column]): rowData[column];
+		}
+
+		resultRows.push(newData);
+	}
+
+	return resultRows;
+}
 class OraDBTable {
   constructor ({ database, table, handlers }){
     this.database = database;
@@ -56,18 +74,10 @@ class OraDBTable {
   }
   
   columns = {
-    getAll: async () => {
-      return this.database.pragma(`table_info(${ this.table });`)
-    },
-    list: async function () {
-      return ( await this.getAll() ).map(col => col.name);
-    },
-    get: async function (column) {
-      return ( await this.getAll() ).find(columnData => columnData.name === column);
-    },
-    has: async function (column) {
-      return await this.get(column) !== undefined ? true : false;
-    },
+    getAll: async () =>    await this.database.pragma(`table_info(${ this.table });`),
+		list: async () =>    ( await this.columns.getAll() ).map(col => col.name),
+    get: async column => ( await this.columns.getAll() ).find($ => $.name === column),
+    has: async column =>   await this.columns.get(column) !== undefined ? true : false,
     rename: async({ column, to }) => {
       let { table, columns, database } = this;
   
@@ -78,15 +88,15 @@ class OraDBTable {
       else return database.prepare(`ALTER TABLE ${ table } RENAME COLUMN ${column} TO ${to};`).run();
     },
     add: async (...columns) => {
-      let { table, database } = this;
+      const { table, database } = this;
 
       if (table  == undefined)  console.error('@SqliteDriverTable.columns.add: Missing Table');
       if (columns == undefined) console.error('@SqliteDriverTable.columns.add: Missing Columns');
 
-      let list = await this.columns.list();
+      const list = await this.columns.list();
 
       for (let columnData of columns){
-        let { column, type = 'TEXT' } = columnData;
+        const { column, type = 'TEXT' } = columnData;
         
         if (!list.includes(column)){
           if (await this.columns.has(column)) console.log(`ending cause col exists ${column}`);
@@ -95,11 +105,11 @@ class OraDBTable {
       }
     },
     remove: async (...columns) => {
-      let { table, database } = this;
+      const { table, database } = this;
       if (table  == undefined)  console.error('@SqliteDriverTable.columns.remove: Missing Table');
       if (columns == undefined) console.error('@SqliteDriverTable.columns.remove: Missing Column');
 
-      let list = await this.columns.list();
+      const list = await this.columns.list();
 
       for (let column of columns)
         if (list.includes(column))
@@ -116,7 +126,8 @@ class OraDBTable {
 
       return await database.prepare(`SELECT Count(*) FROM ${table}`).get()['Count(*)'];
     },
-    getData: async ({ columns = [], where = {}, limit } = {}) => {
+    getData: async ({ columns = [], where = {}, limit, order } = {}) => {
+
       const { database, table } = this;
       const columnList      = await this.columns.list();
       const columnsFiltered = columns.filter(col => columnList.includes(col));
@@ -127,28 +138,28 @@ class OraDBTable {
 			const str = {
 				cols: columnsFiltered.length > 0 ? columnsFiltered.join(', ') : '*',
 				where: parseWhereKeys(whereKeys.string),
-				limit: `limit ${limit}`
+				limit: `limit ${limit}`,
+				order: ''
 			}
 
-			const stmt = `SELECT ${str.cols} FROM ${table} ${str.where} ${str.limit};`;
+			console.log(where)
+
+			if (typeof order == 'object')
+				str.order = `ORDER BY ${Object.entries(order).map(c => `${c[0]} ${c[1]}`).join(',')}`;
+			
+
+			const stmt = `SELECT ${str.cols} FROM ${table} ${str.where} ${str.order} ${str.limit};`;
+			console.log(stmt)
 
       return await database.prepare(stmt).all(whereKeys.data);
     },
     getDataParsed: async (args) =>  {
-      const data = (await this.row.getData({ ...args, limit: 1 }))[0];
-      const newData = {};
+      const data = (await this.row.getData(args));
+			if (data == undefined) return;
 
-      for (let column of Object.keys(data)){
-        let type = (await this.columns.get(column))?.type || 'TEXT';
-				
-        if (typeof this.handlers[type]?.parse == 'function')
-					newData[column] = await this.handlers[type].parse(data[column]);
-				
-        else
-					newData[column] = data[column];
-      }
+			const parsed = await parseRows(await this.columns.getAll(), this.handlers)(...data);
 
-      return newData;
+			return args?.limit == undefined ? parsed?.[0] : parsed;
     },
     get: async ({ column, where, path }) => {
       const { database, table } = this;
