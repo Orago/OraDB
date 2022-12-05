@@ -4,7 +4,6 @@
   "description": "Sqlite + JSON",
   "version": "0.2.3",
   "main": "index.js",
-  "type": "module",
   "scripts": {
     "start": "node index.js"
   },
