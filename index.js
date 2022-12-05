@@ -42,6 +42,31 @@ const defaultHandlers = {
 	} 
 };
 
+<<<<<<< Updated upstream
+=======
+const parseWhereKeys = str => (str.length > 0 ? 'WHERE ' : '') + str;
+
+const parseRows = (columnData, handlers) => async (...rows) => {
+	const getCol = name => columnData.find($ => $.name == name);
+	const resultRows = [];
+
+	for (let rowData of rows){
+		const newData = {};
+
+		for (let column of Object.keys(rowData)){
+			const columnType = getCol(column)?.type || 'TEXT';
+			const { parse } = handlers?.[columnType] || {};
+	
+			newData[column] = typeof parse == 'function' ? await parse(rowData[column]): rowData[column];
+		}
+
+		resultRows.push(newData);
+	}
+
+	return resultRows;
+}
+
+>>>>>>> Stashed changes
 class OraDBTable {
   constructor ({ database, table, handlers }){
     this.database = database;
@@ -50,6 +75,7 @@ class OraDBTable {
   }
   
   columns = {
+<<<<<<< Updated upstream
     getAll: async () => {
       return this.database.pragma(`table_info(${ this.table });`)
     },
@@ -62,11 +88,25 @@ class OraDBTable {
     has: async function (column) {
       return await this.get(column) !== undefined ? true : false;
     },
+=======
+    getAll: async () =>    await this.database.pragma(`table_info(${ this.table });`),
+		list: async () =>    ( await this.columns.getAll() ).map( columnData => columnData.name),
+    get: async columnName => ( await this.columns.getAll() ).find(columnData => columnData.name === columnName),
+    has: async columnName =>   await this.columns.get(columnName) !== undefined ? true : false,
+>>>>>>> Stashed changes
     rename: async({ column, to }) => {
-      let { table, columns, database } = this;
+      const { table, columns, database } = this;
   
+<<<<<<< Updated upstream
       if (table  == undefined) return console.error('[!] SqliteDriverTable.columns.remove: Missing Table');
       if (column == undefined) return console.error('[!] SqliteDriverTable.columns.remove: Missing Column');
+=======
+      if (table  == undefined)
+				console.error('@SqliteDriverTable.columns.remove: Missing Table');
+
+      if (column == undefined)
+				console.error('@SqliteDriverTable.columns.remove: Missing Column');
+>>>>>>> Stashed changes
   
       if (!await columns.has(column)) return console.log(`ending cause col doesnt exist ${column}`);
       else return database.prepare(`ALTER TABLE ${ table } RENAME COLUMN ${column} TO ${to};`).run();
@@ -74,8 +114,16 @@ class OraDBTable {
     add: async (...columns) => {
       let { table, database } = this;
 
+<<<<<<< Updated upstream
       if (table  == undefined)  return console.error('[!] SqliteDriverTable.columns.add: Missing Table');
       if (columns == undefined) return console.error('[!] SqliteDriverTable.columns.add: Missing Columns');
+=======
+      if (table   == undefined)
+				console.error('@SqliteDriverTable.columns.add: Missing Table');
+
+      if (columns == undefined)
+				console.error('@SqliteDriverTable.columns.add: Missing Columns');
+>>>>>>> Stashed changes
 
       let list = await this.columns.list();
 
@@ -91,13 +139,27 @@ class OraDBTable {
       }
     },
     remove: async (...columns) => {
+<<<<<<< Updated upstream
       let { table, database } = this;
       if (table  == undefined)  return console.error('[!] SqliteDriverTable.columns.remove: Missing Table');
       if (columns == undefined) return console.error('[!] SqliteDriverTable.columns.remove: Missing Column');
+=======
+      const { table, database } = this;
+			
+      if (table  == undefined)
+				console.error('@SqliteDriverTable.columns.remove: Missing Table');
+
+      if (columns == undefined)
+				console.error('@SqliteDriverTable.columns.remove: Missing Column');
+>>>>>>> Stashed changes
 
       let list = await this.columns.list();
 
+<<<<<<< Updated upstream
       for (let column of columns){
+=======
+      for (const column of columns)
+>>>>>>> Stashed changes
         if (list.includes(column))
           database.prepare(`ALTER TABLE ${table} DROP COLUMN ${column};`).run();
       }
@@ -105,12 +167,22 @@ class OraDBTable {
   }
 
   row = {
+<<<<<<< Updated upstream
 		has: async ({ where = {} }) => {
       return await this.row.get({ column: Object.keys(where)[0], where }) != null;
+=======
+		has: async ({ where }) => {
+      return await this.row.get({
+				column: Object.keys(where)[0],
+				where
+			}) != null;
+>>>>>>> Stashed changes
     },
-    count: async () => {
+    count: async () => await this.database.prepare(`SELECT Count(*) FROM ${this.table}`).get()['Count(*)'],
+    getData: async ({ columns = [], where = {}, limit, order } = {}) => {
       const { database, table } = this;
 
+<<<<<<< Updated upstream
       return await database.prepare(`SELECT Count(*) FROM ${table}`).get()['Count(*)'];
     },
     getData: async ({ columns = [], where = {} }) => {
@@ -119,12 +191,27 @@ class OraDBTable {
       const columnsFiltered = columns.filter(col => allCols.includes(col));
       const colString = columnsFiltered.length > 0 ? columnsFiltered.join(', ') : '*';
       const whereKeys = parseKeys({ keys: where, pre: 'WHERE', joint: ' AND ' });
+=======
+      const columnList = await this.columns.list();
+
+      const columnsFiltered = columns.filter(columnName => columnList.includes(columnName));
+
+      const whereKeys = parseKeys({
+				keys: where,
+				pre: 'WHERE',
+				joint: ' AND '
+			});
+
+			if (typeof limit !== 'number')
+				limit = 1;
+>>>>>>> Stashed changes
 
       return await database.prepare(`SELECT ${colString} FROM ${table} ${(whereKeys.string.length > 0 ? 'WHERE ' : '') + whereKeys.string};`).get(whereKeys.data);
     },
     getDataParsed: async (...args) =>  {
       const data = await this.row.getData(...args);
 
+<<<<<<< Updated upstream
       let newData = {};
 
       for (let column of Object.keys(data)){
@@ -134,24 +221,61 @@ class OraDBTable {
           newData[column] = await this.handlers[type].parse(data[column]);
         else newData[column] = data[column];
       }
+=======
+			if (typeof order == 'object')
+				// 0 = Name
+				// 1 = Order
+				str.order = `ORDER BY ${Object.entries(order).map(columnSort => `${columnSort[0]} ${columnSort[1]}`).join(',')}`;
+
+			const stmt = `SELECT ${str.cols} FROM ${table} ${str.where} ${str.order} ${str.limit};`;
+>>>>>>> Stashed changes
 
       return newData;
     },
+<<<<<<< Updated upstream
     get: async ({ column, where = {}, path }) => {
       if (column == undefined) return console.error(`[!] SqliteDriverTable.row.get: Missing Column`);
+=======
+    getDataParsed: async (args) =>  {
+      const data = await this.row.getData(args);
+
+			if (data == undefined)
+				return;
+>>>>>>> Stashed changes
 
       const { database, table } = this;
+<<<<<<< Updated upstream
       const whereKeys   = parseKeys({ keys: where, pre: 'WHERE', joint: ' AND ' });
       const whereClause =  (whereKeys.string.length > 0 ? 'WHERE ' : '') + whereKeys.string;
       const value       = await database.prepare(`SELECT ${column} FROM ${table} ${whereClause};`).get(whereKeys.data);
       const columnType  = ( await this.columns.get(column) )?.type || 'TEXT';
+=======
+
+      const whereKeys = parseKeys({
+				keys: where,
+				pre: 'WHERE',
+				joint: ' AND '
+			});
+
+			const statement = `SELECT ${column} FROM ${table} ${parseWhereKeys(whereKeys.string)};`;
+      const value = await database.prepare(statement).get(whereKeys.data);
+
+      const columnType = (
+				await this.columns.get(column)
+			)?.type || 'TEXT';
+>>>>>>> Stashed changes
 
       if (value?.[column] == undefined) return null;
 
       else if (this.handlers.hasOwnProperty(columnType)){
 				const data = await this.handlers[columnType].parse(value?.[column]);
+<<<<<<< Updated upstream
         
         return path != undefined ? get(data, path) : data;
+=======
+
+				return path != undefined ? get(data, path) : data;
+>>>>>>> Stashed changes
 			}
       else return value?.[column];
     },
@@ -235,7 +359,12 @@ class OraDBTable {
 		},
     delete: async ({ where }) => {
       const { database, table } = this;
-      const whereKeys = parseKeys({ keys: where, pre: 'WHERE', joint: ' AND ' });
+
+      const whereKeys = parseKeys({
+				keys: where,
+				pre: 'WHERE',
+				joint: ' AND '
+			});
 
       return (
         database
@@ -247,27 +376,50 @@ class OraDBTable {
     setValues: async (args) => {
       const { database, table, handlers, columns: cols } = this;
       const { where, columns } = args;
+<<<<<<< Updated upstream
 			const allColumns  = await cols.getAll();
       const columnList  = await cols.list();
+=======
+
+			const allColumns = await this.columns.getAll();
+>>>>>>> Stashed changes
       const entryExists = await this.row.has({ where });
 
-			for (const column of Object.keys(columns)){
-				const columnData = allColumns.find(col => col.name == column),
-							{ type } = columnData;
+			for (const columnName of Object.keys(columns)){
+				const columnData = allColumns.find(columnData => columnData.name == columnName);
+				const { type } = columnData;
 
+<<<<<<< Updated upstream
 				if (columnData != undefined
           && handlers?.[type]?.stringify
         )
           columns[column] = await handlers[type].stringify(columns[column]);
 
 				else delete columns[column];
+=======
+				if (
+					columnData != undefined &&
+					handlers?.[type]?.stringify
+				){
+					columns[columnName] = await handlers[type].stringify(columns[columnName]);
+				}
+				else delete columns[columnName];
+>>>>>>> Stashed changes
 			}
 			
-			if (Object.keys(columns).length == 0) return;
+			if (Object.keys(columns).length == 0)
+				return;
 
       if (entryExists){
-        let columnKeys = parseKeys({ keys: columns, pre: 'COL' }),
-            whereKeys  = parseKeys({ keys: where, pre: 'WHERE', joint: ' AND ' });
+        const columnKeys = parseKeys({
+					keys: columns,
+					pre: 'COL'
+				});
+
+				const whereKeys = parseKeys({
+					keys: where, pre: 'WHERE',
+					joint: ' AND '
+				});
 
         let statement = `UPDATE ${table} SET ${columnKeys.string} WHERE ${whereKeys.string};`;
         
@@ -277,10 +429,15 @@ class OraDBTable {
 				});
       }
       else {
+<<<<<<< Updated upstream
         const statement = `INSERT INTO ${table} VALUES (${columnList.map( e => '@' + e).join(', ')})`;
         
         for (const name of columnList)
           columns[name] ??= null;
+=======
+				const valFix = Object.keys(columns).map($ => `@${$}`).toString();
+        const statement = `INSERT INTO ${table} (${Object.keys(columns)}) values (${valFix})`;
+>>>>>>> Stashed changes
 
         await database.prepare(statement).run(columns);
       }
@@ -300,7 +457,7 @@ class OraDB {
     }
   }
 
-  async prepareTable ({ table, columns = { id: 'TEXT', data: 'JSON' } }){
+  async prepareTable ({ table, columns = { id: 'TEXT', data: 'JSON' }, pruneOtherColumns = false }){
     let columnTypes = (
       Object
       .entries(columns)
@@ -326,8 +483,14 @@ class OraDB {
     return this.database.prepare(`DROP TABLE IF EXISTS ${table};`).run();
   }
 
-  async deleteAllRows ({ table }){
-    return this.database.prepare(`DELETE FROM ${ table }`).run().changes;
+	async deleteAllRows ({ table }){
+    return (
+			this
+			.database
+			.prepare(`DELETE FROM ${ table }`)
+			.run()
+			.changes
+		);
   }
 }
 
