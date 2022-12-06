@@ -2,9 +2,9 @@ const {
   set,
   get,
   unset
-} = require("lodash");
+} = require('lodash');
 
-const sqlite3 = require("better-sqlite3");
+const sqlite3 = require('better-sqlite3');
 
 const BSON = require('bson');
 
@@ -66,6 +66,7 @@ const parseRows = (columnData, handlers) => async (...rows) => {
 
 	return resultRows;
 }
+
 class OraDBTable {
   constructor ({ database, table, handlers }){
     this.database = database;
@@ -74,24 +75,37 @@ class OraDBTable {
   }
   
   columns = {
-    getAll: async () =>    await this.database.pragma(`table_info(${ this.table });`),
-		list: async () =>    ( await this.columns.getAll() ).map(col => col.name),
-    get: async column => ( await this.columns.getAll() ).find($ => $.name === column),
-    has: async column =>   await this.columns.get(column) !== undefined ? true : false,
-    rename: async({ column, to }) => {
+    getAll: async () => await this.database.pragma(`table_info(${ this.table });`),
+		
+		list: async () => ( await this.columns.getAll() ).map(col => col.name),
+    
+		get: async columnName => ( await this.columns.getAll() ).find(columnData => columnData.name === columnName),
+    
+		has: async columnName => await this.columns.get(columnName) !== undefined ? true : false,
+    
+		rename: async({ column, to }) => {
       let { table, columns, database } = this;
   
-      if (table  == undefined) console.error('@SqliteDriverTable.columns.remove: Missing Table');
-      if (column == undefined) console.error('@SqliteDriverTable.columns.remove: Missing Column');
+      if (table == undefined)
+				console.error('@SqliteDriverTable.columns.remove: Missing Table');
+
+      if (column == undefined)
+				console.error('@SqliteDriverTable.columns.remove: Missing Column');
   
-      if (!await columns.has(column)) return console.log(`ending cause col doesnt exist ${column}`);
-      else return database.prepare(`ALTER TABLE ${ table } RENAME COLUMN ${column} TO ${to};`).run();
+      if (!await columns.has(column))
+				return console.log(`ending cause col doesnt exist ${column}`);
+
+      return database.prepare(`ALTER TABLE ${ table } RENAME COLUMN ${column} TO ${to};`).run();
     },
+
     add: async (...columns) => {
       const { table, database } = this;
 
-      if (table  == undefined)  console.error('@SqliteDriverTable.columns.add: Missing Table');
-      if (columns == undefined) console.error('@SqliteDriverTable.columns.add: Missing Columns');
+      if (table == undefined) 
+				console.error('@SqliteDriverTable.columns.add: Missing Table');
+
+      if (columns == undefined)
+				console.error('@SqliteDriverTable.columns.add: Missing Columns');
 
       const list = await this.columns.list();
 
@@ -104,10 +118,14 @@ class OraDBTable {
         }
       }
     },
-    remove: async (...columns) => {
+    
+		remove: async (...columns) => {
       const { table, database } = this;
-      if (table  == undefined)  console.error('@SqliteDriverTable.columns.remove: Missing Table');
-      if (columns == undefined) console.error('@SqliteDriverTable.columns.remove: Missing Column');
+      if (table == undefined) 
+				console.error('@SqliteDriverTable.columns.remove: Missing Table');
+
+      if (columns == undefined)
+				console.error('@SqliteDriverTable.columns.remove: Missing Column');
 
       const list = await this.columns.list();
 
@@ -121,131 +139,180 @@ class OraDBTable {
 		has: async ({ where }) => {
       return await this.row.get({ column: Object.keys(where)[0], where }) != null;
     },
-    count: async () => {
+    
+		count: async () => {
       const { database, table } = this;
 
       return await database.prepare(`SELECT Count(*) FROM ${table}`).get()['Count(*)'];
     },
-    getData: async ({ columns = [], where = {}, limit, order } = {}) => {
-
+    
+		getData: async ({ columns = [], where = {}, limit, order } = {}) => {
       const { database, table } = this;
       const columnList      = await this.columns.list();
-      const columnsFiltered = columns.filter(col => columnList.includes(col));
+      const validColumns = columns.filter(col => columnList.includes(col));
       const whereKeys       = parseKeys({ keys: where, pre: 'WHERE', joint: ' AND ' });
 
 			if (typeof limit !== 'number') limit = 1;
 
-			const str = {
-				cols: columnsFiltered.length > 0 ? columnsFiltered.join(', ') : '*',
-				where: parseWhereKeys(whereKeys.string),
-				limit: `limit ${limit}`,
-				order: ''
-			}
-
-			console.log(where)
-
-			if (typeof order == 'object')
-				str.order = `ORDER BY ${Object.entries(order).map(c => `${c[0]} ${c[1]}`).join(',')}`;
+			let stmt;
 			
+			{
+				let __cols = validColumns.length > 0 ? validColumns.join(', ') : '*',
+						__where = parseWhereKeys(whereKeys.string),
+						__limit = `limit ${limit}`,
+						__order = '';
+				console.log(__cols)
 
-			const stmt = `SELECT ${str.cols} FROM ${table} ${str.where} ${str.order} ${str.limit};`;
-			console.log(stmt)
+				if (typeof order == 'object'){
+					__order = (
+						`ORDER BY ${
+							Object
+							.entries(order)
+							.map(columnPair => {
+								let [key = 'id', direction] = columnPair || [];
 
+								if (!['ASC', 'DESC'].includes(direction?.toUpperCase()))
+									direction = 'ASC'
+
+								return `${key} ${direction}`;
+							})
+							.join(',')
+						}`
+					);
+				}
+		
+
+				stmt = `SELECT ${__cols} FROM ${table} ${__where} ${__order} ${__limit};`;
+			}
+			
       return await database.prepare(stmt).all(whereKeys.data);
     },
-    getDataParsed: async (args) =>  {
-      const data = (await this.row.getData(args));
+    
+		
+		getDataParsed: async (args) =>  {
+      const data = await this.row.getData(args);
 			if (data == undefined) return;
 
-			const parsed = await parseRows(await this.columns.getAll(), this.handlers)(...data);
+			const parsed = await parseRows(
+				await this.columns.getAll(),
+				this.handlers
+			)(...data);
 
 			return args?.limit == undefined ? parsed?.[0] : parsed;
     },
-    get: async ({ column, where, path }) => {
+    
+		get: async ({ column, where, path }) => {
       const { database, table } = this;
-      const whereKeys = parseKeys({ keys: where, pre: 'WHERE', joint: ' AND ' });
+      const whereKeys = parseKeys({
+				keys: where,
+				pre: 'WHERE',
+				joint: ' AND '
+			});
+			
 			const statement = `SELECT ${column} FROM ${table} ${parseWhereKeys(whereKeys.string)};`;
       const value = await database.prepare(statement).get(whereKeys.data);
       const columnType = ( await this.columns.get(column) )?.type || 'TEXT';
 
-      if (value?.[column] == undefined) return;
+      if (value?.[column] == undefined)
+				return;
 
       else if (this.handlers.hasOwnProperty(columnType)){
-				let data = await this.handlers[columnType].parse(value?.[column]);
-				if (path != undefined)
-					return get(data, path);
-				else return data;
+				const data = await this.handlers[columnType].parse(value?.[column]);
+
+				return path != undefined && typeof data == 'object' ? get(data, path) : data;
 			}
       else return value?.[column];
     },
-		JSON: async ({ column, path,  where }) => {
+		
+		JSON: async ({ column, path, where }) => {
 			const columnData = await this.columns.get(column);
 
-			if (columnData?.type != 'JSON') return console.error(`@SqliteDriverTable.row.updateJSON: Invalid Column Type For (${ column })`);
-      if (path  == undefined) console.error('@SqliteDriverTable.row.updateJSON: Missing Path');
+			if (columnData?.type != 'JSON'){
+				console.error(`@SqliteDriverTable.row.updateJSON: Invalid Column Type For (${ column })`);
 
-  		let obj = await this.row.get({ column, where });
+				return false;
+      }
 
-			if (obj instanceof Object == false) obj = {};
+			if (path  == undefined)
+				console.error('@SqliteDriverTable.row.updateJSON: Missing Path');
 
-			let send = async data => await this.row.setValues({
-				columns: {
-					[column]: data
-				},
+  		let getObj = await this.row.get({
+				column,
 				where
 			});
+			
+			let obj = getObj instanceof Object == true ? getObj : {};
 
-			let addSub = async (second = 0) => {
-				let first = get(obj, path);
+			const sendUpdate = async data => {
+				return await this.row.setValues({
+					columns: { [column]: data },
+					where
+				});
+			}
 
-				if (typeof first != 'number') first = 0;
-
-				set(obj ?? {}, path, first + second);
-
-				await send(obj);
+			let addSub = async (amount = 0) => {
+				const getCurrent = get(obj, path);
+				const current = typeof getCurrent == 'number' ? getCurrent : 0;
+				
+				await sendUpdate(
+					set(obj ?? {}, path, current + amount)
+				);
 			}
 
 			return {
 				get: async () => get(obj, path),
-				update: async value => {
-					set(obj ?? {}, path, value);
-
-					await send(obj);
-				},
+				
+				update: async value => await sendUpdate(
+					set(obj ?? {}, path, value)
+				),
+				
 				add: addSub,
-				subtract: second => addSub(-second),
+				
+				subtract: amount => addSub(-amount),
+				
 				push: async (...items) => {
-					let list = get(obj, path);
-					if (!Array.isArray(list)) list = [];
-					
-					list.push(...items);
-	
-					set(obj ?? {}, path, list);
+					const getList = get(obj, path);
+					const list = (
+						Array.isArray(getList) ? getList : []
+					).concat(...items);
 
-					await send(obj)
+					await sendUpdate(
+						set(obj ?? {}, path, list)
+					)
 				},
+				
 				pull: async (...remove) => {
-					let list = get(obj, path);
-					if (!Array.isArray(list)) list = [];
-					if (!Array.isArray(remove)) remove = [];
-					
-					list = list.filter(value => !remove.includes(value));
-	
-					set(obj ?? {}, path, list);
+					const getList = get(obj, path);
+					const list = Array.isArray(getList) ? getList : [];
 
-					await send(obj);
+					if (!Array.isArray(remove))
+						remove = [];
+
+					await sendUpdate(
+						set(
+							obj ?? {},
+							path,
+							list.filter(value => !remove.includes(value))
+						)
+					);
 				},
+				
 				delete: async () => {
-					unset(obj ?? {}, path);
-
           if (path == undefined) this.row.delete({ where });
-          else await send(obj);
+          else await sendUpdate(
+						unset(obj ?? {}, path)
+					);
 				}
 			}
 		},
-    delete: async ({ where }) => {
+    
+		delete: async ({ where }) => {
       const { database, table } = this;
-      const whereKeys = parseKeys({ keys: where, pre: 'WHERE', joint: ' AND ' });
+      const whereKeys = parseKeys({
+				keys: where,
+				pre: 'WHERE',
+				joint: ' AND '
+			});
 
       return (
         database
@@ -254,28 +321,41 @@ class OraDBTable {
         .changes
       );
     },
-    setValues: async (args) => {
+    
+		setValues: async (args) => {
       const { database, table, handlers } = this;
       const { where, columns } = args;
+
 			const allColumns = await this.columns.getAll();
-      const columnList = await this.columns.list();
       const entryExists = await this.row.has({ where });
 
 			for (const column of Object.keys(columns)){
-				const columnData = allColumns.find(col => col.name == column),
-							{ type } = columnData;
+				const columnData = allColumns.find(col => col.name == column);
+				const { type } = columnData;
 
-				if (columnData != undefined && handlers?.[type]?.stringify){
-						columns[column] = await handlers[type].stringify(columns[column]);
+				if (
+					columnData != undefined &&
+					handlers?.[type]?.stringify
+				){
+					columns[column] = await handlers[type].stringify(columns[column]);
 				}
 				else delete columns[column];
 			}
 			
-			if (Object.keys(columns).length == 0) return;
+			if (Object.keys(columns).length == 0)
+				return;
 
       if (entryExists){
-        let columnKeys = parseKeys({ keys: columns, pre: 'COL' }),
-            whereKeys  = parseKeys({ keys: where, pre: 'WHERE', joint: ' AND ' });
+        const columnKeys = parseKeys({
+					keys: columns,
+					pre: 'COL'
+				});
+
+        const whereKeys  = parseKeys({
+					keys: where,
+					pre: 'WHERE',
+					joint: ' AND '
+				});
 
         let statement = `UPDATE ${table} SET ${columnKeys.string} ${parseWhereKeys(whereKeys.string)};;`;
         
@@ -288,7 +368,6 @@ class OraDBTable {
 				const valFix = Object.keys(columns).map($ => `@${$}`).toString();
         let statement = `INSERT INTO ${table} (${Object.keys(columns)}) values (${valFix})`;
 
-        
         await database.prepare(statement).run(columns);
       }
     }
@@ -305,6 +384,15 @@ class OraDB {
     }
   }
 
+	flags = {
+		order: {
+			asc:       'ASC',
+			ascending: 'ASC',
+			desc:       'DESC',
+			descending: 'DESC'
+		}
+	}
+
   async prepareTable ({ table, columns = { id: 'TEXT', data: 'JSON' } }){
     let columnTypes = (
       Object
@@ -317,21 +405,33 @@ class OraDB {
   }
 
   openTable ({ table, columns }){
+		const { database, handlers } = this;
+		
     this.prepareTable({ table, columns });
     
     return new OraDBTable({
-      database: this.database,
-      handlers: this.handlers,
+      database,
+      handlers,
       table
     });
   }
 
   async dropTable ({ table }){
-    return this.database.prepare(`DROP TABLE ${ table };`);
+    return (
+			this
+			.database
+			.prepare(`DROP TABLE ${ table };`)
+		);
   }
 
   async deleteAllRows ({ table }){
-    return this.database.prepare(`DELETE FROM ${ table }`).run().changes;
+    return (
+			this
+			.database
+			.prepare(`DELETE FROM ${ table }`)
+			.run()
+			.changes
+		);
   }
 }
 
