@@ -56,7 +56,8 @@ const parseRows = (columnData, handlers) => async (...rows) => {
 		const newData = {};
 
 		for (let column of Object.keys(rowData)){
-			const { parse } = handlers?.[ getCol(column)?.type || 'TEXT' ] || {};
+			const columnType = getCol(column)?.type  || 'TEXT';
+			const { parse } = handlers?.[columnType] || {};
 	
 			newData[column] = typeof parse == 'function' ? await parse(rowData[column]): rowData[column];
 		}
@@ -98,7 +99,23 @@ class OraDBTable {
       return database.prepare(`ALTER TABLE ${ table } RENAME COLUMN ${column} TO ${to};`).run();
     },
 
-    add: async (...columns) => {
+		update: async (columns) => {
+      const list = await this.columns.list();
+
+			for (let [columnName, type = 'TEXT'] of Object.entries(columns)){
+        const column = { [columnName]: type };
+
+        const getCol = await this.columns.get(columnName)
+
+        if (list.includes(columnName) && (getCol.name != columnName || getCol.type != type)){
+          await this.columns.remove(column);
+					await this.columns.add(column);
+        }
+				else await this.columns.add(column);
+			}
+		},
+
+    addOrRemove: async ({ columns, mode = true } = {}) => {
       const { table, database } = this;
 
       if (table == undefined) 
@@ -109,29 +126,31 @@ class OraDBTable {
 
       const list = await this.columns.list();
 
-      for (let columnData of columns){
-        const { column, type = 'TEXT' } = columnData;
-        
-        if (!list.includes(column)){
-          if (await this.columns.has(column)) console.log(`ending cause col exists ${column}`);
-          else database.prepare(`ALTER TABLE ${ table } ADD COLUMN ${ column } ${ type.toUpperCase() }`).run();
-        }
+      const _addColumn = async (columnName, type) => {
+        return await database.prepare(`ALTER TABLE ${ table } ADD COLUMN ${ columnName } ${ type?.toUpperCase() }`).run();
       }
+      
+      const _removeColumn = async columnName => {
+        return await database.prepare(`ALTER TABLE ${ table } DROP COLUMN ${ columnName };`).run();
+      }
+
+      for (const column of columns){
+        const [columnName, type = 'TEXT'] = Object.entries(column)[0];
+
+        if (mode && !list.includes(columnName))
+            _addColumn(columnName, type);
+            
+        else if (!mode && list.includes(columnName))
+          _removeColumn(columnName)
+      }
+    },
+
+    add: async (...columns) => {
+      return this.columns.addOrRemove({ columns, mode: true });
     },
     
 		remove: async (...columns) => {
-      const { table, database } = this;
-      if (table == undefined) 
-				console.error('@SqliteDriverTable.columns.remove: Missing Table');
-
-      if (columns == undefined)
-				console.error('@SqliteDriverTable.columns.remove: Missing Column');
-
-      const list = await this.columns.list();
-
-      for (let column of columns)
-        if (list.includes(column))
-          database.prepare(`ALTER TABLE ${table} DROP COLUMN ${column};`).run();
+      return this.columns.addOrRemove({ columns, mode: false });
     }
   }
 
@@ -400,6 +419,8 @@ class OraDB {
       .map(e => e.join(' '))
       .join(', ')
     );
+
+		
 
     this.database.prepare(`CREATE TABLE IF NOT EXISTS ${ table } (${ columnTypes })`).run();
   }
