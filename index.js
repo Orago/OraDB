@@ -88,10 +88,10 @@ class OraDBTable {
       let { table, columns, database } = this;
   
       if (table == undefined)
-				console.error('@SqliteDriverTable.columns.remove: Missing Table');
+				console.error('@OraDBTable.columns.remove: Missing Table');
 
       if (column == undefined)
-				console.error('@SqliteDriverTable.columns.remove: Missing Column');
+				console.error('@OraDBTable.columns.remove: Missing Column');
   
       if (!await columns.has(column))
 				return console.log(`ending cause col doesnt exist ${column}`);
@@ -102,16 +102,21 @@ class OraDBTable {
 		update: async (columns) => {
       const list = await this.columns.list();
 
-			for (let [columnName, type = 'TEXT'] of Object.entries(columns)){
-        const column = { [columnName]: type };
+			for (let [columnName, type] of Object.entries(columns)){
+				type = (type || 'TEXT')?.toUpperCase();
 
+        const column = { [columnName]: type };
         const getCol = await this.columns.get(columnName)
 
-        if (list.includes(columnName) && (getCol.name != columnName || getCol.type != type)){
-          await this.columns.remove(column);
-					await this.columns.add(column);
-        }
-				else await this.columns.add(column);
+        if (
+					list.includes(columnName) &&
+					getCol.type != type
+				){
+					await this.columns.remove(Object.keys(column)[0]);
+					console.log(getCol)
+				}
+
+        await this.columns.add(column);
 			}
 		},
 
@@ -119,14 +124,14 @@ class OraDBTable {
       const { table, database } = this;
 
       if (table == undefined) 
-				console.error('@SqliteDriverTable.columns.add: Missing Table');
+				console.error('@OraDBTable.columns.add: Missing Table');
 
       if (columns == undefined)
-				console.error('@SqliteDriverTable.columns.add: Missing Columns');
+				console.error('@OraDBTable.columns.add: Missing Columns');
 
-      const list = await this.columns.list();
+      let list = await this.columns.list();
 
-      const _addColumn = async (columnName, type) => {
+      const _addColumn = async (columnName, type = 'TEXT') => {
         return await database.prepare(`ALTER TABLE ${ table } ADD COLUMN ${ columnName } ${ type?.toUpperCase() }`).run();
       }
       
@@ -137,21 +142,56 @@ class OraDBTable {
       for (const column of columns){
         const [columnName, type = 'TEXT'] = Object.entries(column)[0];
 
-        if (mode && !list.includes(columnName))
-            _addColumn(columnName, type);
-            
-        else if (!mode && list.includes(columnName))
-          _removeColumn(columnName)
+        if (mode && !list.includes(columnName)){
+					await _addColumn(columnName, type);
+				}
+
+        else if (!mode && list.includes(columnName)){
+					if (list.length > 1){
+						list = list.filter($ => $ != columnName);
+
+          	await _removeColumn(columnName);
+					}
+					
+					else {
+						await _addColumn('__placeholder__');
+						await _removeColumn(columnName);
+					}
+				}
       }
+
+			if (
+				mode &&
+				list.includes('__placeholder__')
+			) await _removeColumn('__placeholder__');
     },
 
-    add: async (...columns) => {
+    add: async (columnGroup) => {
+			const columns = (
+				Object
+				.entries(columnGroup)
+				.map(column => ({
+					[column[0]]: column[1]
+				}))
+			);
+			
       return this.columns.addOrRemove({ columns, mode: true });
     },
     
-		remove: async (...columns) => {
+		remove: async (...columnsToChange) => {
+			const columns = columnsToChange.map($ => ({ [$]: true }));
+			
       return this.columns.addOrRemove({ columns, mode: false });
-    }
+    },
+
+		removeAll: async () => {
+			const list = await this.columns.list();
+
+			for (const columnName of list)
+				await this.columns.remove(columnName);
+	
+			return true;
+		}
   }
 
   row = {
@@ -180,7 +220,6 @@ class OraDBTable {
 						__where = parseWhereKeys(whereKeys.string),
 						__limit = `limit ${limit}`,
 						__order = '';
-				console.log(__cols)
 
 				if (typeof order == 'object'){
 					__order = (
@@ -247,13 +286,13 @@ class OraDBTable {
 			const columnData = await this.columns.get(column);
 
 			if (columnData?.type != 'JSON'){
-				console.error(`@SqliteDriverTable.row.updateJSON: Invalid Column Type For (${ column })`);
+				console.error(`@OraDBTable.row.updateJSON: Invalid Column Type For (${ column })`);
 
 				return false;
       }
 
 			if (path  == undefined)
-				console.error('@SqliteDriverTable.row.updateJSON: Missing Path');
+				console.error('@OraDBTable.row.updateJSON: Missing Path');
 
   		let getObj = await this.row.get({
 				column,
@@ -262,12 +301,11 @@ class OraDBTable {
 			
 			let obj = getObj instanceof Object == true ? getObj : {};
 
-			const sendUpdate = async data => {
-				return await this.row.setValues({
+			const sendUpdate = async data =>
+				await this.row.setValues({
 					columns: { [column]: data },
 					where
 				});
-			}
 
 			let addSub = async (amount = 0) => {
 				const getCurrent = get(obj, path);
@@ -412,15 +450,13 @@ class OraDB {
 		}
 	}
 
-  async prepareTable ({ table, columns = { id: 'TEXT', data: 'JSON' } }){
-    let columnTypes = (
+  async prepareTable ({ table, columns = { __placeholder__: 'TEXT' } }){
+    const columnTypes = (
       Object
       .entries(columns)
       .map(e => e.join(' '))
       .join(', ')
     );
-
-		
 
     this.database.prepare(`CREATE TABLE IF NOT EXISTS ${ table } (${ columnTypes })`).run();
   }
@@ -437,6 +473,48 @@ class OraDB {
     });
   }
 
+	backup ({ path: pathInput, startTime = 1000 }){
+		const { path } = this;
+		const backupPath = pathInput || `${path}.bak`;
+		const startSeconds = Math.floor(startTime / 1000);
+
+		let paused = false;
+		let lastProgress = -1;
+
+		console.error(`@OraDB.backup: Backup Starting In ${startSeconds} Second${startSeconds > 1 ? 's' : ''}.`);
+
+		setTimeout(() => {
+			this.database.backup(backupPath, {
+				progress({ totalPages, remainingPages }) {
+					const progress = paused || (
+						(totalPages - remainingPages) / totalPages * 100
+					).toFixed(1);
+	
+					if (lastProgress != progress){
+						lastProgress = progress;
+	
+						if (!paused)
+							console.log(`@OraDB.backup: Progress - ${progress}%`);
+						else
+							console.log('@OraDB.backup: Paused')
+					}
+	
+					return paused ? 0 : 200;
+				}
+			})
+			.then(() => {
+				console.log('backup complete!');
+			})
+			.catch((err) => {
+				console.log('backup failed:', err);
+			});
+		}, startTime);
+
+		return {
+			pause: (state = true) => paused = state
+		}
+	}
+
   async dropTable ({ table }){
     return (
 			this
@@ -445,7 +523,7 @@ class OraDB {
 		);
   }
 
-  async deleteAllRows ({ table }){
+  async deleteAllRows (table){
     return (
 			this
 			.database
