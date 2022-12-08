@@ -232,10 +232,12 @@ class OraDBTable {
 								if (!['ASC', 'DESC'].includes(direction?.toUpperCase()))
 									direction = 'ASC'
 
+
+
 								return `${key} ${direction}`;
 							})
 							.join(',')
-						}`
+						} NULLS LAST`
 					);
 				}
 		
