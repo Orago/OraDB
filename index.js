@@ -205,20 +205,22 @@ class OraDBTable {
       return await database.prepare(`SELECT Count(*) FROM ${table}`).get()['Count(*)'];
     },
     
-		getData: async ({ columns = [], where = {}, limit, order } = {}) => {
+		getData: async ({ columns = [], where = {}, limit, offset, order } = {}) => {
       const { database, table } = this;
       const columnList      = await this.columns.list();
       const validColumns = columns.filter(col => columnList.includes(col));
       const whereKeys       = parseKeys({ keys: where, pre: 'WHERE', joint: ' AND ' });
 
 			if (typeof limit !== 'number') limit = 1;
+			if (typeof offset !== 'number') offset = 0;
 
 			let stmt;
 			
 			{
 				let __cols = validColumns.length > 0 ? validColumns.join(', ') : '*',
 						__where = parseWhereKeys(whereKeys.string),
-						__limit = `limit ${limit}`,
+						__limit = `LIMIT ${limit}`,
+						__offset = `OFFSET ${offset}`,
 						__order = '';
 
 				if (typeof order == 'object'){
@@ -232,8 +234,6 @@ class OraDBTable {
 								if (!['ASC', 'DESC'].includes(direction?.toUpperCase()))
 									direction = 'ASC'
 
-
-
 								return `${key} ${direction}`;
 							})
 							.join(',')
@@ -242,7 +242,7 @@ class OraDBTable {
 				}
 		
 
-				stmt = `SELECT ${__cols} FROM ${table} ${__where} ${__order} ${__limit};`;
+				stmt = `SELECT ${__cols} FROM ${table} ${__where} ${__order} ${__limit} ${__offset};`;
 			}
 			
       return await database.prepare(stmt).all(whereKeys.data);
