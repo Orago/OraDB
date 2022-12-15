@@ -7,9 +7,6 @@
   "scripts": {
     "start": "node index.js"
   },
-  "engines": {
-    "node": "16.x"
-  },
   "dependencies": {
     "better-sqlite3": "^7.6.2",
     "bson": "^4.7.0",
