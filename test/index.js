@@ -7,7 +7,7 @@ let run = async () => {
 	await table.columns.remove('undefined')
 
 
-	const al = await table.row.getDataParsed({ order: { score: 'DESC' } })
+	const al = await table.row.getDataParsed({ order: 'random' })
 	console.log(
 		al, al?.length
 	)

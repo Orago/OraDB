@@ -223,21 +223,32 @@ class OraDBTable {
 						__offset = `OFFSET ${offset}`,
 						__order = '';
 
-				if (typeof order == 'object'){
+				{
+					const buildOrder = () => {
+						const orderType = typeof order;
+
+						if (orderType == 'object'){
+							return (
+								Object
+								.entries(order)
+								.map(columnPair => {
+									let [key = 'id', direction] = columnPair || [];
+									
+									if (!['ASC', 'DESC'].includes(direction?.toUpperCase()))
+										direction = 'ASC';
+	
+									return `${key} ${direction}`;
+								})
+								.join(',')
+							);
+						}
+						
+						if (order == 'random')
+							return 'RANDOM()';
+					};
+
 					__order = (
-						`ORDER BY ${
-							Object
-							.entries(order)
-							.map(columnPair => {
-								let [key = 'id', direction] = columnPair || [];
-
-								if (!['ASC', 'DESC'].includes(direction?.toUpperCase()))
-									direction = 'ASC'
-
-								return `${key} ${direction}`;
-							})
-							.join(',')
-						} NULLS LAST`
+						`ORDER BY ${buildOrder()} NULLS LAST`
 					);
 				}
 		
