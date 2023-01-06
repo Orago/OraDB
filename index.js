@@ -321,9 +321,10 @@ class OraDBTable {
 					where
 				});
 
-			let addSub = async (amount = 0) => {
+			let addSub = async (getAmount = 0) => {
 				const getCurrent = get(obj, path);
 				const current = !isNaN(getCurrent) ? Number(getCurrent) : 0;
+				const amount = !isNaN(getAmount) ? Number(getAmount) : 0;
 				
 				await sendUpdate(
 					set(obj ?? {}, path, current + amount)
