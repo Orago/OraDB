@@ -369,10 +369,11 @@ class OraDBTable {
 				},
 				
 				delete: async () => {
-          if (path == undefined) this.row.delete({ where });
-          else await sendUpdate(
-						unset(obj ?? {}, path)
-					);
+          if (path == undefined) return this.row.delete({ where });
+
+          unset(obj ?? {}, path);
+          
+          await sendUpdate(obj);
 				}
 			}
 		},
