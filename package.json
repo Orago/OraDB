@@ -2,7 +2,7 @@
 
   "name": "ora-db",
   "description": "Sqlite + JSON",
-  "version": "0.2.47",
+  "version": "0.2.48",
   "main": "index.js",
   "scripts": {
     "start": "node index.js"

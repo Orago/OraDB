@@ -281,6 +281,7 @@ class OraDBTable {
 			});
 			
 			const statement = `SELECT ${column} FROM ${table} ${parseWhereKeys(whereKeys.string)};`;
+			
       const value = await database.prepare(statement).get(whereKeys.data);
       const columnType = ( await this.columns.get(column) )?.type || 'TEXT';
 
@@ -322,7 +323,7 @@ class OraDBTable {
 
 			let addSub = async (amount = 0) => {
 				const getCurrent = get(obj, path);
-				const current = typeof getCurrent == 'number' ? getCurrent : 0;
+				const current = !isNaN(getCurrent) ? Number(getCurrent) : 0;
 				
 				await sendUpdate(
 					set(obj ?? {}, path, current + amount)
