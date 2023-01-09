@@ -33,6 +33,10 @@ const defaultHandlers = {
 		parse: input => input,
 		stringify: input => input
 	},
+	INTEGER: {
+		parse: input => Number(input),
+		stringify: input => input.toString()
+	},
   JSON: {
     parse: input => {
       try { return JSON.parse(input); }
@@ -73,6 +77,9 @@ class OraDBTable {
     this.database = database;
     this.table = table;
     this.handlers = handlers;
+
+		this.$column_cache = new Map(),
+		this.$row_cache = new Map()
   }
   
   columns = {
@@ -80,12 +87,30 @@ class OraDBTable {
 		
 		list: async () => ( await this.columns.getAll() ).map(col => col.name),
     
-		get: async columnName => ( await this.columns.getAll() ).find(columnData => columnData.name === columnName),
+		get: async columnName => {
+			const { $column_cache } = this;
+			const all = await this.columns.getAll();
+
+			if ($column_cache.has(columnName))
+				return $column_cache.get(columnName);
+
+			const result = all.find(columnData => columnData.name === columnName);
+
+			$column_cache.set(columnName, result);
+
+			return result
+		},
     
-		has: async columnName => await this.columns.get(columnName) !== undefined ? true : false,
+		has: async columnName => {
+			const { $column_cache } = this;
+
+			if ($column_cache.has(columnName)) return true;
+			
+			return await this.columns.get(columnName) !== undefined ? true : false
+		},
     
 		rename: async({ column, to }) => {
-      let { table, columns, database } = this;
+      const { table, columns, database, $column_cache } = this;
   
       if (table == undefined)
 				console.error('@OraDBTable.columns.remove: Missing Table');
@@ -95,6 +120,8 @@ class OraDBTable {
   
       if (!await columns.has(column))
 				return console.log(`ending cause col doesnt exist ${column}`);
+
+			$column_cache.delete(column);
 
       return database.prepare(`ALTER TABLE ${ table } RENAME COLUMN ${column} TO ${to};`).run();
     },
@@ -196,9 +223,22 @@ class OraDBTable {
 
   row = {
 		has: async ({ where }) => {
-      return await this.row.get({ column: Object.keys(where)[0], where }) != null;
-    },
-    
+			const { database, table } = this;
+			const whereKeys = parseKeys({ keys: where, pre: 'WHERE', joint: ' AND ' });
+
+			const statement = (`
+				SELECT EXISTS(
+					SELECT 1
+					FROM ${table}
+					${parseWhereKeys(whereKeys.string)}
+				);
+			`).replace(/\n/g, ' ').replace(/\t/g, '');
+			
+			
+      const value = await database.prepare(statement).get(whereKeys.data);
+
+			return Object.values(value)[0];
+		},
 		count: async () => {
       const { database, table } = this;
 
@@ -207,9 +247,9 @@ class OraDBTable {
     
 		getData: async ({ columns = [], where = {}, limit, offset, order } = {}) => {
       const { database, table } = this;
-      const columnList      = await this.columns.list();
+      const columnList = await this.columns.list();
       const validColumns = columns.filter(col => columnList.includes(col));
-      const whereKeys       = parseKeys({ keys: where, pre: 'WHERE', joint: ' AND ' });
+      const whereKeys = parseKeys({ keys: where, pre: 'WHERE', joint: ' AND ' });
 
 			if (typeof limit !== 'number') limit = 1;
 			if (typeof offset !== 'number') offset = 0;
@@ -401,47 +441,33 @@ class OraDBTable {
 
 			const allColumns = await this.columns.getAll();
       const entryExists = await this.row.has({ where });
+			const colMap = new Map(allColumns.map(data => [data.name, data]));
 
 			for (const column of Object.keys(columns)){
-				const columnData = allColumns.find(col => col.name == column);
-				const { type } = columnData;
+				const { type } = colMap.get(column);
 
-				if (
-					columnData != undefined &&
-					handlers?.[type]?.stringify
-				){
+				if (handlers?.[type]?.stringify){
 					columns[column] = await handlers[type].stringify(columns[column]);
 				}
 				else delete columns[column];
 			}
 			
-			if (Object.keys(columns).length == 0)
-				return;
+			if (Object.keys(columns).length == 0) return;
+
 
       if (entryExists){
-        const columnKeys = parseKeys({
-					keys: columns,
-					pre: 'COL'
-				});
-
-        const whereKeys  = parseKeys({
-					keys: where,
-					pre: 'WHERE',
-					joint: ' AND '
-				});
-
-        let statement = `UPDATE ${table} SET ${columnKeys.string} ${parseWhereKeys(whereKeys.string)};;`;
+        const columnKeys = parseKeys({ keys: columns, pre: 'COL' });
+        const whereKeys  = parseKeys({ keys: where, pre: 'WHERE', joint: ' AND ' });
         
-        await database.prepare(statement).run({
+        await database.prepare(`UPDATE ${table} SET ${columnKeys.string} ${parseWhereKeys(whereKeys.string)};`).run({
 					...columnKeys.data,
 					...whereKeys.data
 				});
       }
       else {
 				const valFix = Object.keys(columns).map($ => `@${$}`).toString();
-        let statement = `INSERT INTO ${table} (${Object.keys(columns)}) values (${valFix})`;
 
-        await database.prepare(statement).run(columns);
+        await database.prepare(`INSERT INTO ${table} (${Object.keys(columns)}) values (${valFix})`).run(columns);
       }
     }
   }

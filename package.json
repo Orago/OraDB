@@ -1,28 +1,28 @@
 {
-
-  "name": "ora-db",
-  "description": "Sqlite + JSON",
-  "version": "0.2.49",
-  "main": "index.js",
-  "scripts": {
-    "start": "node index.js"
-  },
-  "dependencies": {
-    "better-sqlite3": "^7.6.2",
-    "bson": "^4.7.0",
-    "lodash": "^4.17.21"
-  },
-  "repository": {
-    "type": "git",
-    "url": "git+https://github.com/Orago/OraDB.git"
-  },
-  "keywords": [
-    "database"
-  ],
-  "author": "Orago",
-  "license": "ISC",
-  "bugs": {
-    "url": "https://github.com/Orago/OraDB/issues"
-  },
-  "homepage": "https://github.com/Orago/OraDB#readme"
+	"name": "ora-db",
+	"description": "Sqlite + JSON",
+	"version": "0.2.50",
+	"main": "index.js",
+	"scripts": {
+		"start": "node index.js"
+	},
+	"dependencies": {
+		"better-sqlite3": "^7.6.2",
+		"bson": "^4.7.0",
+		"casual": "^1.6.2",
+		"lodash": "^4.17.21"
+	},
+	"repository": {
+		"type": "git",
+		"url": "git+https://github.com/Orago/OraDB.git"
+	},
+	"keywords": [
+		"database"
+	],
+	"author": "Orago",
+	"license": "ISC",
+	"bugs": {
+		"url": "https://github.com/Orago/OraDB/issues"
+	},
+	"homepage": "https://github.com/Orago/OraDB#readme"
 }
