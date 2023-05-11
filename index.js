@@ -78,36 +78,32 @@ class OraDBTable {
 		this.table = table;
 		this.handlers = handlers;
 
-		this.$column_cache = new Map(),
-			this.$row_cache = new Map()
+		this.$column_cache = new Map();
+		this.$row_cache = new Map();
 	}
 
 	columns = {
 		getAll: async () => await this.database.pragma(`table_info(${this.table});`),
-
-		list: async () => (await this.columns.getAll()).map(col => col.name),
+		list: async () => await this.columns.getAll().then($ => $.map(col => col.name)),
 
 		get: async columnName => {
 			const { $column_cache } = this;
-			const all = await this.columns.getAll();
+			const allColumns = await this.columns.getAll();
 
 			if ($column_cache.has(columnName))
 				return $column_cache.get(columnName);
 
-			const result = all.find(columnData => columnData.name === columnName);
+			const result = allColumns.find(columnData => columnData.name === columnName);
 
 			$column_cache.set(columnName, result);
 
 			return result
 		},
 
-		has: async columnName => {
-			const { $column_cache } = this;
-
-			if ($column_cache.has(columnName)) return true;
-
-			return await this.columns.get(columnName) !== undefined ? true : false
-		},
+		has: async columnName => (
+			this.$column_cache.has(columnName) ||
+			await this.columns.get(columnName) !== undefined
+		),
 
 		rename: async ({ column, to }) => {
 			const { table, columns, database, $column_cache } = this;
@@ -119,7 +115,7 @@ class OraDBTable {
 				console.error('@OraDBTable.columns.remove: Missing Column');
 
 			if (!await columns.has(column))
-				return console.log(`ending cause col doesnt exist ${column}`);
+				return console.log(`ending because column doesnt exist ${column}`);
 
 			$column_cache.delete(column);
 
@@ -138,10 +134,7 @@ class OraDBTable {
 				if (
 					list.includes(columnName) &&
 					getCol.type != type
-				) {
-					await this.columns.remove(Object.keys(column)[0]);
-					console.log(getCol)
-				}
+				) await this.columns.remove(Object.keys(column)[0]);
 
 				await this.columns.add(column);
 			}
@@ -158,20 +151,18 @@ class OraDBTable {
 
 			let list = await this.columns.list();
 
-			const _addColumn = async (columnName, type = 'TEXT') => {
-				return await database.prepare(`ALTER TABLE ${table} ADD COLUMN ${columnName} ${type?.toUpperCase()}`).run();
-			}
+			const _addColumn = async (columnName, type = 'TEXT') =>
+				await database.prepare(`ALTER TABLE ${table} ADD COLUMN ${columnName} ${type?.toUpperCase()}`).run();
 
-			const _removeColumn = async columnName => {
-				return await database.prepare(`ALTER TABLE ${table} DROP COLUMN ${columnName};`).run();
-			}
+			const _removeColumn = async columnName =>
+				await database.prepare(`ALTER TABLE ${table} DROP COLUMN ${columnName};`).run();
 
 			for (const column of columns) {
 				const [columnName, type = 'TEXT'] = Object.entries(column)[0];
 
-				if (mode && !list.includes(columnName)) {
+				if (mode && !list.includes(columnName))
 					await _addColumn(columnName, type);
-				}
+					
 
 				else if (!mode && list.includes(columnName)) {
 					if (list.length > 1) {
@@ -197,8 +188,8 @@ class OraDBTable {
 			const columns = (
 				Object
 					.entries(columnGroup)
-					.map(column => ({
-						[column[0]]: column[1]
+					.map(([key, value]) => ({
+						[key]: value
 					}))
 			);
 
@@ -208,7 +199,10 @@ class OraDBTable {
 		remove: async (...columnsToChange) => {
 			const columns = columnsToChange.map($ => ({ [$]: true }));
 
-			return this.columns.addOrRemove({ columns, mode: false });
+			return this.columns.addOrRemove({
+				columns,
+				mode: false
+			});
 		},
 
 		removeAll: async () => {
@@ -234,67 +228,55 @@ class OraDBTable {
 				);
 			`).replace(/\n/g, ' ').replace(/\t/g, '');
 
-
 			const value = await database.prepare(statement).get(whereKeys.data);
 
 			return Object.values(value)[0];
 		},
-		count: async () => {
-			const { database, table } = this;
-
-			return await database.prepare(`SELECT Count(*) FROM ${table}`).get()['Count(*)'];
-		},
+		count: async () => await this.database.prepare(`SELECT Count(*) FROM ${this.table}`).get()['Count(*)'],
 
 		getData: async ({ columns = [], where = {}, limit, offset, order } = {}) => {
 			const { database, table } = this;
 			const columnList = await this.columns.list();
 			const validColumns = columns.filter(col => columnList.includes(col));
-			const whereKeys = parseKeys({ keys: where, pre: 'WHERE', joint: ' AND ' });
+			const whereKeys = parseKeys({
+				keys: where,
+				pre: 'WHERE',
+				joint: ' AND '
+			});
 
 			if (typeof limit !== 'number') limit = 1;
 			if (typeof offset !== 'number') offset = 0;
 
-			let stmt;
+			const buildOrder = () => {
+				const orderType = typeof order;
 
-			{
-				let __cols = validColumns.length > 0 ? validColumns.join(', ') : '*',
-					__where = parseWhereKeys(whereKeys.string),
-					__limit = `LIMIT ${limit}`,
-					__offset = `OFFSET ${offset}`,
-					__order = '';
+				if (orderType == 'object') {
+					function pairColumns ([key = 'id', direction] = []){
+						if (!['ASC', 'DESC'].includes(direction?.toUpperCase()))
+							direction = 'ASC';
 
-				{
-					const buildOrder = () => {
-						const orderType = typeof order;
+						return `${key} ${direction}`;
+					}
 
-						if (orderType == 'object') {
-							return (
-								Object
-									.entries(order)
-									.map(columnPair => {
-										let [key = 'id', direction] = columnPair || [];
-
-										if (!['ASC', 'DESC'].includes(direction?.toUpperCase()))
-											direction = 'ASC';
-
-										return `${key} ${direction}`;
-									})
-									.join(',')
-							);
-						}
-
-						if (order == 'random')
-							return 'RANDOM()';
-					};
-
-					__order = (
-						`ORDER BY ${buildOrder()} NULLS LAST`
+					return (
+						Object
+							.entries(order)
+							.map(pairColumns)
+							.join(',')
 					);
 				}
 
+				if (order == 'random') return 'RANDOM()';
+			};
 
-				stmt = `SELECT ${__cols} FROM ${table} ${__where} ${__order} ${__limit} ${__offset};`;
-			}
+			const statement_Columns = validColumns.length > 0 ? validColumns.join(', ') : '*';
+			const statement_Where = parseWhereKeys(whereKeys.string);
+			const statement_Limit = `LIMIT ${limit}`;
+			const statement_Offset = `OFFSET ${offset}`;
+			const statement_Order = `ORDER BY ${buildOrder()} NULLS LAST`;
+
+			//* Final Statement to run on database
+			const stmt = `SELECT ${statement_Columns} FROM ${table} ${statement_Where} ${statement_Order} ${statement_Limit} ${statement_Offset};`;
 
 			return await database.prepare(stmt).all(whereKeys.data);
 		},
@@ -303,6 +285,7 @@ class OraDBTable {
 		getDataParsed: async (args) => {
 			const data = await this.row.getData(args);
 			if (data == undefined) return;
+			
 
 			const parsed = await parseRows(
 				await this.columns.getAll(),
@@ -446,28 +429,29 @@ class OraDBTable {
 			for (const column of Object.keys(columns)) {
 				const { type } = colMap.get(column);
 
-				if (handlers?.[type]?.stringify) {
+				if (handlers?.[type]?.stringify)
 					columns[column] = await handlers[type].stringify(columns[column]);
-				}
+
 				else delete columns[column];
 			}
 
 			if (Object.keys(columns).length == 0) return;
 
-
 			if (entryExists) {
 				const columnKeys = parseKeys({ keys: columns, pre: 'COL' });
 				const whereKeys = parseKeys({ keys: where, pre: 'WHERE', joint: ' AND ' });
+				const statement = `UPDATE ${table} SET ${columnKeys.string} ${parseWhereKeys(whereKeys.string)};`;
 
-				await database.prepare(`UPDATE ${table} SET ${columnKeys.string} ${parseWhereKeys(whereKeys.string)};`).run({
+				await database.prepare(statement).run({
 					...columnKeys.data,
 					...whereKeys.data
 				});
 			}
 			else {
-				const valFix = Object.keys(columns).map($ => `@${$}`).toString();
+				const fixedValues = Object.keys(columns).map($ => `@${$}`).toString();
+				const statement = `INSERT INTO ${table} (${Object.keys(columns)}) values (${fixedValues})`
 
-				await database.prepare(`INSERT INTO ${table} (${Object.keys(columns)}) values (${valFix})`).run(columns);
+				await database.prepare(statement).run(columns);
 			}
 		}
 	}
@@ -506,7 +490,10 @@ class OraDB {
 	openTable({ table, columns }) {
 		const { database, handlers } = this;
 
-		this.prepareTable({ table, columns });
+		this.prepareTable({
+			table,
+			columns
+		});
 
 		return new OraDBTable({
 			database,
@@ -535,21 +522,14 @@ class OraDB {
 					if (lastProgress != progress) {
 						lastProgress = progress;
 
-						if (!paused)
-							console.log(`@OraDB.backup: Progress - ${progress}%`);
-						else
-							console.log('@OraDB.backup: Paused')
+						console.log(paused ? '@OraDB.backup: Paused': `@OraDB.backup: Progress - ${progress}%`);
 					}
 
 					return paused ? 0 : 200;
 				}
 			})
-				.then(() => {
-					console.log('backup complete!');
-				})
-				.catch((err) => {
-					console.log('backup failed:', err);
-				});
+				.then(() => console.log('backup complete!'))
+				.catch((err) => console.log('backup failed:', err));
 		}, startTime);
 
 		return {
