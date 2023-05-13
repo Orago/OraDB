@@ -232,7 +232,18 @@ class OraDBTable {
 
 			return Object.values(value)[0];
 		},
+		
 		count: async () => await this.database.prepare(`SELECT Count(*) FROM ${this.table}`).get()['Count(*)'],
+		
+		countMatching: async ({ where }) => {
+			const whereKeys = parseKeys({
+				keys: where,
+				pre: 'WHERE',
+				joint: ' AND '
+			});
+
+			return await this.database.prepare(`SELECT Count(*) FROM ${this.table} ${parseWhereKeys(whereKeys.string)}`).get(whereKeys.data)['Count(*)'];
+		},
 
 		getData: async ({ columns = [], where = {}, limit, offset, order } = {}) => {
 			const { database, table } = this;
